@@ -1,0 +1,6 @@
+crawl4ai== 0.5.0.post8
+playwright==1.51.0
+langchain==0.3.23
+fastapi
+pydantic==2.11.2
+uvicorn
