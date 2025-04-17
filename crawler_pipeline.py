@@ -5,11 +5,11 @@ import datetime
 from fastapi import APIRouter, HTTPException
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from docx import Document
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, root_validator
 from dotenv import load_dotenv
-from best_first_test import BestFirstCrawl
+from best_first import BestFirstCrawl
 from depth_first import DepthFirstCrawl
-from breath_first import BreathFirstCrawl
+from breadth_first import BreadthFirstCrawl
 
 load_dotenv()
 
@@ -20,20 +20,21 @@ class CrawlRequest(BaseModel):
     url: str
     strategy: str
     method: str
-    #keywords: Optional[List[str]] = None
+    keywords: Optional[List[str]] = None
     depth: int = Field(..., ge=0, le=3)
-    '''
-    @model_validator(mode="before")
+
+    @root_validator(pre=True)
     def validate_keywords_for_strategy(cls, values):
         strategy = values.get("strategy", "").lower()
         keywords = values.get("keywords")
 
         if strategy == "best first" and not keywords:
             raise ValueError("Keywords must be provided for best first strategy.")
-        if strategy == "depth first" and keywords:
-            print("Note: Keywords provided but will be ignored for depth first strategy.")
+        if strategy in ["depth first" , "breadth first"] and keywords:
+            raise ValueError("keywords must not be provided for breadth first and depth first strategy")
+            #print("Note: Keywords provided but will be ignored for depth first strategy.")
         return values
-'''
+
 def save_results_to_docx(strategy, method, results: list[dict]) -> str:
     local_storage_path = os.path.join(os.path.expanduser("~"), "Downloads", "crawl_exports")
     os.makedirs(local_storage_path, exist_ok=True)
@@ -72,10 +73,32 @@ def start_crawling(request: CrawlRequest):
         method = request.method
         strategy = request.strategy.lower()
         depth = request.depth
-        #keywords = request.keywords
+        keywords = request.keywords
         results = []
 
-        if strategy == "depth first":
+        if strategy == "best first":
+            if method == "single":
+                crawl_single_page_service = BestFirstCrawl()
+                crawl_single_page = crawl_single_page_service.crawl_single_page(url)
+                results = loop.run_until_complete(crawl_single_page)
+
+            elif method == "recursive":
+                best_first_crawl_service = BestFirstCrawl()
+                best_first_crawl = best_first_crawl_service.best_first_crawl(url, depth, keywords)
+                results = loop.run_until_complete(best_first_crawl)
+
+        elif strategy == "breadth first":
+            if method == "single":
+                crawl_single_page_service = BreadthFirstCrawl()
+                crawl_single_page = crawl_single_page_service.crawl_single_page(url)
+                results = loop.run_until_complete(crawl_single_page)
+
+            elif method == "recursive":
+                breadth_first_crawl_service = BreadthFirstCrawl()
+                breadth_first_crawl = breadth_first_crawl_service.breadth_first_crawl(url, depth)
+                results = loop.run_until_complete(breadth_first_crawl)
+
+        elif strategy == "depth first":
             if method == "single":
                 crawl_single_page_service = DepthFirstCrawl()
                 crawl_single_page = crawl_single_page_service.crawl_single_page(url)
@@ -84,17 +107,6 @@ def start_crawling(request: CrawlRequest):
             elif method == "recursive":
                 depth_first_crawl_service = DepthFirstCrawl()
                 depth_first_crawl = depth_first_crawl_service.depth_first_crawl(url, depth)
-                results = loop.run_until_complete(depth_first_crawl)
-
-        elif strategy == "breath first":
-            if method == "single":
-                crawl_single_page_service = BreathFirstCrawl()
-                crawl_single_page = crawl_single_page_service.crawl_single_page(url)
-                results = loop.run_until_complete(crawl_single_page)
-
-            elif method == "recursive":
-                depth_first_crawl_service = BreathFirstCrawl()
-                depth_first_crawl = depth_first_crawl_service.Breath_first_crawl(url, depth)
                 results = loop.run_until_complete(depth_first_crawl)
 
         else:
